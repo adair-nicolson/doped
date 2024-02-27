@@ -727,6 +727,8 @@ class DefectsParser:
         self.bulk_corrections_data = {  # so we only load and parse bulk data once
             "bulk_locpot_dict": None,
             "bulk_site_potentials": None,
+        }
+        self.phs_data = {
             "bulk_outcar": None,
         }
         parsed_defect_entries = []
@@ -808,7 +810,7 @@ class DefectsParser:
                                         dir_type="bulk",
                                     )
                                 bulk_outcar = get_outcar(bulk_outcar_path)
-                                self.bulk_corrections_data["bulk_outcar"] = bulk_outcar
+                                self.phs_data["bulk_outcar"] = bulk_outcar
 
                 print(self.bulk_corrections_data)
 
@@ -1203,6 +1205,7 @@ class DefectsParser:
                 bulk_band_gap_path=self.bulk_band_gap_path,
                 load_phs_data=self.load_phs_data,
                 **self.bulk_corrections_data,
+                **self.phs_data,
             )
 
             if dp.skip_corrections and dp.defect_entry.charge_state != 0 and self.dielectric is None:
@@ -1225,11 +1228,8 @@ class DefectsParser:
                     dp.defect_entry.calculation_metadata
                 )["bulk_site_potentials"]
 
-            if (
-                dp.defect_entry.calculation_metadata.get("phs_data") is not None
-                and self.bulk_corrections_data.get("bulk_outcar") is None
-            ):
-                self.bulk_corrections_data["bulk_outcar"] = dp.kwargs["bulk_outcar"]
+            if dp.defect_entry.calculation_metadata.get("phs_data") is not None:  # ADAIR CHECK
+                self.phs_data["bulk_outcar"] = dp.kwargs["bulk_outcar"]
 
         except Exception as exc:
             warnings.warn(
@@ -1788,6 +1788,7 @@ class DefectParser:
         if load_phs_data:
             bulk_outcar_phs = dp.kwargs.get("bulk_outcar", None)
             if bulk_outcar_phs is None:
+                print("loading")
                 bulk_outcar_path, multiple = _get_output_files_and_check_if_multiple(
                     "OUTCAR", dp.defect_entry.calculation_metadata["bulk_path"]
                 )
