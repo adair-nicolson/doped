@@ -584,7 +584,7 @@ class DefectsParsingTestCase(unittest.TestCase):
             load_phs_data=True,
         ).defect_entry
 
-        bes = defect.get_perturbed_host_state(save_plot=False)
+        bes = defect.get_perturbed_host_state(ks_labels=True)
         with open(f"{self.Cu2SiSe3_DATA_DIR}/Cu2SiSe3_band_edge_states.json") as f:
             expected = json.load(f)
         assert bes == expected
