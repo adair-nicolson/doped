@@ -21,7 +21,6 @@ from pymatgen.entries.computed_entries import ComputedEntry, ComputedStructureEn
 from pymatgen.io.vasp.outputs import Locpot, Outcar
 from scipy.stats import sem
 
-
 _orientational_degeneracy_warning = (
     "The defect supercell has been detected to possibly have a non-scalar matrix expansion, "
     "which could be breaking the cell periodicity and possibly preventing the correct _relaxed_ "
@@ -505,15 +504,17 @@ class DefectEntry(thermo.DefectEntry):
             error_tolerance=error_tolerance,
         )
 
-    def get_perturbed_host_state(self, save_plot: bool = False):
+    def get_perturbed_host_state(self, filename: Optional[str] = None, **kwargs):
         """
         Determines if the defect is a perturbed host state (PHS) and also
         returns a plot of the single-particle eigenvalues.
 
         Args:
-            save_plot (bool):
-                Whether to save the eigenvalue plot.
-                Default is False.
+            filename (str):
+                Filename to save the Kumagai site potential plots to.
+                If None, plots are not saved.
+            **kwargs:
+                Additional kwargs to pass to doped.utils.phs.get_phs_and_eigenvalue.
 
         Returns:
             pydefect BandEdgeStates object
@@ -524,7 +525,7 @@ class DefectEntry(thermo.DefectEntry):
             raise ValueError(
                 "No PHS data loaded for defect_entry. Please parse with load_phs_data = True "
             )
-        return get_phs_and_eigenvalue(self, save_plot)
+        return get_phs_and_eigenvalue(self, filename, **kwargs)
 
     def _get_chempot_term(self, chemical_potentials=None):
         chemical_potentials = chemical_potentials or {}

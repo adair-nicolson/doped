@@ -870,6 +870,7 @@ class DefectsParser:
                 new_warnings_list = []
                 for warning in warnings_list:
                     if warning.startswith("Multiple"):
+                        print(warning)
                         file_type = warning.split("`")[1]
                         directory = warning.split("defect directory: ")[1].split(". Using")[0]
                         chosen_file = warning.split("Using ")[1].split(" to")[0]
@@ -1756,10 +1757,11 @@ class DefectParser:
 
         if load_phs_data:
             v_vise = version("vise")
-            if v_vise <= "0.8.1" and defect_vr.parameters.get("LNONCOLLINEAR") is True:
+
+            if v_vise < "0.8.1" and defect_vr.parameters.get("LNONCOLLINEAR") is True:
                 raise TypeError(
                     f"You have version {v_vise} of the package `vise`,"
-                    f" which does not allowing the parsing of non-collinear calculations."
+                    f" which does not allow the parsing of non-collinear calculations."
                     f" You can install the updated version of `vise` from the GitHub repo for this"
                     f" functionality."
                 )
