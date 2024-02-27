@@ -10,7 +10,6 @@ import contextlib
 import inspect
 import os
 import warnings
-from importlib.metadata import version
 from multiprocessing import Pool, cpu_count
 from typing import Dict, List, Optional, Union
 
@@ -544,6 +543,7 @@ class DefectsParser:
         bulk_band_gap_path: Optional[str] = None,
         processes: Optional[int] = None,
         json_filename: Optional[Union[str, bool]] = None,
+        load_phs_data: Optional[Union[str, bool]] = None,
     ):
         r"""
         A class for rapidly parsing multiple VASP defect supercell calculations
@@ -622,6 +622,11 @@ class DefectsParser:
                 etc). If None (default), set as "{Chemical Formula}_defect_dict.json" where
                 {Chemical Formula} is the chemical formula of the host material.
                 If False, no json file is saved.
+            load_phs_data (bool):
+                Automatically determines the band edge states of the defect to determine
+                if the defect is a PHS. Also returns single-particle levels and their
+                occupation. cite: https://doi.org/10.1103/PhysRevMaterials.5.123803
+                Default = None.
 
         Attributes:
             defect_dict (dict):
@@ -639,6 +644,7 @@ class DefectsParser:
         self.bulk_band_gap_path = bulk_band_gap_path
         self.processes = processes
         self.json_filename = json_filename
+        self.load_phs_data = load_phs_data
 
         possible_defect_folders = [
             dir
@@ -721,6 +727,7 @@ class DefectsParser:
         self.bulk_corrections_data = {  # so we only load and parse bulk data once
             "bulk_locpot_dict": None,
             "bulk_site_potentials": None,
+            "bulk_outcar": None,
         }
         parsed_defect_entries = []
         parsing_warnings = []
@@ -788,6 +795,22 @@ class DefectsParser:
                                 self.bulk_corrections_data[k] = _get_bulk_site_potentials(
                                     self.bulk_path, quiet=True
                                 )
+
+                                # This is slow as loading the same outcar twice. Need to fix this
+                                bulk_outcar_path, multiple = _get_output_files_and_check_if_multiple(
+                                    "OUTCAR", self.bulk_path
+                                )
+                                if multiple:
+                                    _multiple_files_warning(
+                                        "OUTCAR",
+                                        bulk_path,
+                                        bulk_outcar_path,
+                                        dir_type="bulk",
+                                    )
+                                bulk_outcar = get_outcar(bulk_outcar_path)
+                                self.bulk_corrections_data["bulk_outcar"] = bulk_outcar
+
+                print(self.bulk_corrections_data)
 
                 folders_to_process = [
                     folder for folder in self.defect_folders if folder != charged_defect_folder
@@ -1178,6 +1201,7 @@ class DefectsParser:
                 skip_corrections=self.skip_corrections,
                 error_tolerance=self.error_tolerance,
                 bulk_band_gap_path=self.bulk_band_gap_path,
+                load_phs_data=self.load_phs_data,
                 **self.bulk_corrections_data,
             )
 
@@ -1200,6 +1224,12 @@ class DefectsParser:
                 self.bulk_corrections_data["bulk_site_potentials"] = (
                     dp.defect_entry.calculation_metadata
                 )["bulk_site_potentials"]
+
+            if (
+                dp.defect_entry.calculation_metadata.get("phs_data") is not None
+                and self.bulk_corrections_data.get("bulk_outcar") is None
+            ):
+                self.bulk_corrections_data["bulk_outcar"] = dp.kwargs["bulk_outcar"]
 
         except Exception as exc:
             warnings.warn(
@@ -1458,7 +1488,7 @@ class DefectParser:
                 Automatically determines the band edge states of the defect to determine
                 if the defect is a PHS. Also returns single-particle levels and their
                 occupation. cite: https://doi.org/10.1103/PhysRevMaterials.5.123803
-                Default = False.
+                Default = None.
             **kwargs:
                 Keyword arguments to pass to ``DefectParser()`` methods
                 (``load_FNV_data()``, ``load_eFNV_data()``, ``load_bulk_gap_data()``)
@@ -1485,7 +1515,7 @@ class DefectParser:
                 bulk_vr_path,
                 dir_type="bulk",
             )
-        bulk_vr = get_vasprun(bulk_vr_path)
+        bulk_vr = get_vasprun(bulk_vr_path, parse_projected_eigen=True)
         bulk_supercell = bulk_vr.final_structure.copy()
         # add defect simple properties
         (
@@ -1499,7 +1529,7 @@ class DefectParser:
                 defect_vr_path,
                 dir_type="defect",
             )
-        defect_vr = get_vasprun(defect_vr_path)
+        defect_vr = get_vasprun(defect_vr_path, parse_projected_eigen=True)
 
         possible_defect_name = os.path.basename(
             defect_path.rstrip("/.").rstrip("/")  # remove any trailing slashes to ensure correct name
@@ -1755,27 +1785,16 @@ class DefectParser:
                         f"you should double-check your calculations and parsed results!"
                     )
 
-        if load_phs_data:
-            v_vise = version("vise")
-
-            if v_vise < "0.8.1" and defect_vr.parameters.get("LNONCOLLINEAR") is True:
-                raise TypeError(
-                    f"You have version {v_vise} of the package `vise`,"
-                    f" which does not allow the parsing of non-collinear calculations."
-                    f" You can install the updated version of `vise` from the GitHub repo for this"
-                    f" functionality."
+        if True:
+            bulk_outcar_phs = dp.kwargs.get("bulk_outcar", None)
+            if bulk_outcar_phs is None:
+                bulk_outcar_path, multiple = _get_output_files_and_check_if_multiple(
+                    "OUTCAR", dp.defect_entry.calculation_metadata["bulk_path"]
                 )
+                bulk_outcar_phs = get_outcar(bulk_outcar_path)
+                dp.kwargs["bulk_outcar"] = bulk_outcar_phs
 
-            bulk_outcar_path, multiple = _get_output_files_and_check_if_multiple(
-                "OUTCAR", dp.defect_entry.calculation_metadata["bulk_path"]
-            )
-            bulk_outcar_phs = get_outcar(bulk_outcar_path)
-            bulk_vr_phs = get_vasprun(bulk_vr_path, parse_projected_eigen=True)
-            defect_vr_phs = get_vasprun(defect_vr_path, parse_projected_eigen=True)
-
-            band_orb, vbm_info, cbm_info = get_band_edge_info(
-                dp, bulk_vr_phs, bulk_outcar_phs, defect_vr_phs
-            )
+            band_orb, vbm_info, cbm_info = get_band_edge_info(dp, bulk_vr, bulk_outcar_phs, defect_vr)
 
             defect_entry.calculation_metadata["phs_data"] = {
                 "band_orb": band_orb,

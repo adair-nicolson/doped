@@ -198,7 +198,7 @@ def get_phs_and_eigenvalue(DefectEntry, filename: Optional[str] = None, ks_label
                     elif np.array_equal(emp.axs[a].get_children()[i].get_facecolor(), [[0, 0.5, 0, 1]]):
                         partial = True
 
-        if ks_labels is False:
+        if ks_labels is True:
             for axes in emp.axs:
                 annotations = [child for child in axes.get_children() if isinstance(child, plt.Annotation)]
                 for annotation in annotations:
@@ -230,8 +230,8 @@ def get_phs_and_eigenvalue(DefectEntry, filename: Optional[str] = None, ks_label
 
         ax.set_ylim([ymin - 0.25, ymax + 0.75])
         # add a point at 0,-5 with the color range and label unoccopied states
-        ax.scatter(0, -5, label="Unoccupied", color=(0.22, 0.325, 0.643))
         ax.scatter(0, -5, label="Occupied", color=(0.98, 0.639, 0.086))
+        ax.scatter(0, -5, label="Unoccupied", color=(0.22, 0.325, 0.643))
         if partial:
             ax.scatter(0, -5, label="Partially Occupied", color=(0, 0.5, 0))
         ax.axhline(-5, 0, 1, color="black", linewidth=0.5, linestyle="-.", label="Band edges")
@@ -240,4 +240,4 @@ def get_phs_and_eigenvalue(DefectEntry, filename: Optional[str] = None, ks_label
     if filename:
         emp.plt.savefig(filename, bbox_inches="tight", transparent=True, backend=_get_backend(filename))
 
-    return bes, emp
+    return bes, fig
