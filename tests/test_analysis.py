@@ -584,10 +584,10 @@ class DefectsParsingTestCase(unittest.TestCase):
             load_phs_data=True,
         ).defect_entry
 
-        bes = defect.get_perturbed_host_state(ks_labels=True)
+        bes, fig = defect.get_perturbed_host_state(ks_labels=True)
         with open(f"{self.Cu2SiSe3_DATA_DIR}/Cu2SiSe3_band_edge_states.json") as f:
             expected = json.load(f)
-        assert bes == expected
+        assert bes.as_dict() == expected
 
     @custom_mpl_image_compare(filename="Sb2Si2Te6_v_Sb_-3_eFNV_plot_no_intralayer.png")
     def test_sb2si2te6_eFNV(self):
