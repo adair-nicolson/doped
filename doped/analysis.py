@@ -543,7 +543,7 @@ class DefectsParser:
         bulk_band_gap_path: Optional[str] = None,
         processes: Optional[int] = None,
         json_filename: Optional[Union[str, bool]] = None,
-        load_phs_data: Optional[Union[str, bool]] = None,
+        load_phs_data: Optional[Union[str, bool]] = False,
     ):
         r"""
         A class for rapidly parsing multiple VASP defect supercell calculations
@@ -626,7 +626,7 @@ class DefectsParser:
                 Automatically determines the band edge states of the defect to determine
                 if the defect is a PHS. Also returns single-particle levels and their
                 occupation. cite: https://doi.org/10.1103/PhysRevMaterials.5.123803
-                Default = None.
+                Default = False.
 
         Attributes:
             defect_dict (dict):
@@ -1785,7 +1785,7 @@ class DefectParser:
                         f"you should double-check your calculations and parsed results!"
                     )
 
-        if True:
+        if load_phs_data:
             bulk_outcar_phs = dp.kwargs.get("bulk_outcar", None)
             if bulk_outcar_phs is None:
                 bulk_outcar_path, multiple = _get_output_files_and_check_if_multiple(
