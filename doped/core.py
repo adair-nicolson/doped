@@ -521,7 +521,7 @@ class DefectEntry(thermo.DefectEntry):
         """
         from doped.utils.phs import get_phs_and_eigenvalue
 
-        if self.calculation_metadata.get("phs_data") is None:
+        if self.calculation_metadata.get("phs_data", None) is None:
             raise ValueError(
                 "No PHS data loaded for defect_entry. Please parse with load_phs_data = True "
             )

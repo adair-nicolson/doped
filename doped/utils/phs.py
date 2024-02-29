@@ -9,6 +9,7 @@ https://github.com/kumagai-group/vise, to avoid the user requiring additional fi
 # suppress pydefect INFO messages
 import logging
 import os
+import warnings
 from importlib.metadata import version
 from typing import Any, List, Optional
 
@@ -100,19 +101,21 @@ def get_band_edge_info(DefectParser, bulk_vr, bulk_outcar, defect_vr):
     Returns:
         pydefect EdgeInfo class
     """
+    # Change this to a warning...
     try:
         band_edge_prop = VaspBandEdgeProperties(bulk_vr, bulk_outcar)
         if defect_vr.parameters.get("LNONCOLLINEAR") is True:
             assert band_edge_prop._ho_band_index(Spin.up) == int(bulk_vr.parameters.get("NELECT")) - 1
-    except AssertionError as e:
+    except AssertionError:
         v_vise = version("vise")
         if v_vise <= "0.8.1":
-            raise AssertionError(
+            warnings.warn(
                 f"You have version {v_vise} of the package `vise`,"
                 f" which does not allow the parsing of non-collinear calculations."
                 f" You can install the updated version of `vise` from the GitHub repo for this"
-                f" functionality. Or set load_phs_data=False not skip the PHS analysis."
-            ) from e
+                f" functionality. Attempting to load the PHS data has been automatically skipped"
+            )
+            return None, None, None
 
     orbs, s = bulk_vr.projected_eigenvalues, bulk_vr.final_structure
     vbm_info = get_edge_info(band_edge_prop.vbm_info, orbs, s, bulk_vr)

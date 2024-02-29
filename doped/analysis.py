@@ -543,7 +543,7 @@ class DefectsParser:
         bulk_band_gap_path: Optional[str] = None,
         processes: Optional[int] = None,
         json_filename: Optional[Union[str, bool]] = None,
-        load_phs_data: Optional[Union[str, bool]] = False,
+        load_phs_data: bool = True,
     ):
         r"""
         A class for rapidly parsing multiple VASP defect supercell calculations
@@ -626,7 +626,7 @@ class DefectsParser:
                 Automatically determines the band edge states of the defect to determine
                 if the defect is a PHS. Also returns single-particle levels and their
                 occupation. cite: https://doi.org/10.1103/PhysRevMaterials.5.123803
-                Default = False.
+                Default = True.
 
         Attributes:
             defect_dict (dict):
@@ -728,8 +728,9 @@ class DefectsParser:
             "bulk_locpot_dict": None,
             "bulk_site_potentials": None,
         }
-        self.phs_data = {
+        self.phs_data = {  # so we only need to load bulk data for PHS once
             "bulk_outcar": None,
+            "phs_warning": None,
         }
         parsed_defect_entries = []
         parsing_warnings = []
@@ -797,22 +798,6 @@ class DefectsParser:
                                 self.bulk_corrections_data[k] = _get_bulk_site_potentials(
                                     self.bulk_path, quiet=True
                                 )
-
-                                # This is slow as loading the same outcar twice. Need to fix this
-                                bulk_outcar_path, multiple = _get_output_files_and_check_if_multiple(
-                                    "OUTCAR", self.bulk_path
-                                )
-                                if multiple:
-                                    _multiple_files_warning(
-                                        "OUTCAR",
-                                        bulk_path,
-                                        bulk_outcar_path,
-                                        dir_type="bulk",
-                                    )
-                                bulk_outcar = get_outcar(bulk_outcar_path)
-                                self.phs_data["bulk_outcar"] = bulk_outcar
-
-                print(self.bulk_corrections_data)
 
                 folders_to_process = [
                     folder for folder in self.defect_folders if folder != charged_defect_folder
@@ -895,7 +880,6 @@ class DefectsParser:
                 new_warnings_list = []
                 for warning in warnings_list:
                     if warning.startswith("Multiple"):
-                        print(warning)
                         file_type = warning.split("`")[1]
                         directory = warning.split("defect directory: ")[1].split(". Using")[0]
                         chosen_file = warning.split("Using ")[1].split(" to")[0]
@@ -1228,8 +1212,11 @@ class DefectsParser:
                     dp.defect_entry.calculation_metadata
                 )["bulk_site_potentials"]
 
-            if dp.defect_entry.calculation_metadata.get("phs_data") is not None:  # ADAIR CHECK
+            if dp.kwargs.get("bulk_outcar", None) is not None:  # ADAIR CHECK
                 self.phs_data["bulk_outcar"] = dp.kwargs["bulk_outcar"]
+
+            if dp.kwargs.get("phs_warning", None) is not None:
+                self.phs_data["phs_warning"] = dp.kwargs["phs_warning"]
 
         except Exception as exc:
             warnings.warn(
@@ -1438,7 +1425,7 @@ class DefectParser:
         skip_corrections: bool = False,
         error_tolerance: float = 0.05,
         bulk_band_gap_path: Optional[str] = None,
-        load_phs_data: bool = False,
+        load_phs_data: bool = True,
         **kwargs,
     ):
         """
@@ -1488,7 +1475,7 @@ class DefectParser:
                 Automatically determines the band edge states of the defect to determine
                 if the defect is a PHS. Also returns single-particle levels and their
                 occupation. cite: https://doi.org/10.1103/PhysRevMaterials.5.123803
-                Default = None.
+                Default = False.
             **kwargs:
                 Keyword arguments to pass to ``DefectParser()`` methods
                 (``load_FNV_data()``, ``load_eFNV_data()``, ``load_bulk_gap_data()``)
@@ -1516,6 +1503,13 @@ class DefectParser:
                 dir_type="bulk",
             )
         bulk_vr = get_vasprun(bulk_vr_path, parse_projected_eigen=True)
+        if bulk_vr.projected_eigenvalues is None:
+            load_phs_data = False  # can't load PHS data without projected eigenvalues
+            warnings.warn(
+                "No projected orbitals found in bulk 'vasprun.xml'. Skipping"
+                " automated PHS data loading."
+            )
+
         bulk_supercell = bulk_vr.final_structure.copy()
         # add defect simple properties
         (
@@ -1530,6 +1524,12 @@ class DefectParser:
                 dir_type="defect",
             )
         defect_vr = get_vasprun(defect_vr_path, parse_projected_eigen=True)
+        if defect_vr.projected_eigenvalues is None:
+            load_phs_data = False
+            warnings.warn(
+                "No projected orbitals found in defect 'vasprun.xml'. Skipping"
+                " automated PHS data loading."
+            )
 
         possible_defect_name = os.path.basename(
             defect_path.rstrip("/.").rstrip("/")  # remove any trailing slashes to ensure correct name
@@ -1787,21 +1787,47 @@ class DefectParser:
 
         if load_phs_data:
             bulk_outcar_phs = dp.kwargs.get("bulk_outcar", None)
+            no_phs = False
             if bulk_outcar_phs is None:
-                print("loading")
-                bulk_outcar_path, multiple = _get_output_files_and_check_if_multiple(
-                    "OUTCAR", dp.defect_entry.calculation_metadata["bulk_path"]
-                )
-                bulk_outcar_phs = get_outcar(bulk_outcar_path)
-                dp.kwargs["bulk_outcar"] = bulk_outcar_phs
+                phs_warn = dp.kwargs.get("phs_warning", None)
+                if not isinstance(phs_warn, str):
+                    try:
+                        bulk_outcar_path, multiple = _get_output_files_and_check_if_multiple(
+                            "OUTCAR", dp.defect_entry.calculation_metadata["bulk_path"]
+                        )
+                        bulk_outcar_phs = get_outcar(bulk_outcar_path)
+                        dp.kwargs["bulk_outcar"] = bulk_outcar_phs
+                        dp.kwargs["phs_warning"] = None
 
-            band_orb, vbm_info, cbm_info = get_band_edge_info(dp, bulk_vr, bulk_outcar_phs, defect_vr)
+                    except IsADirectoryError:
+                        # Save warning, so can be used for future defects to skip the loading of PHS file
+                        path_bulk = dp.defect_entry.calculation_metadata["bulk_path"]
+                        dp.kwargs["phs_warning"] = (
+                            f"No `OUTCAR` file found in bulk path {path_bulk}. Skipping"
+                            f" automated PHS data loading for all defects."
+                        )
+                        warnings.warn(dp.kwargs["phs_warning"], UserWarning)
+                        no_phs = True
 
-            defect_entry.calculation_metadata["phs_data"] = {
-                "band_orb": band_orb,
-                "vbm_info": vbm_info,
-                "cbm_info": cbm_info,
-            }
+                else:
+                    no_phs = True
+
+            if not no_phs:
+                band_orb, vbm_info, cbm_info = get_band_edge_info(dp, bulk_vr, bulk_outcar_phs, defect_vr)
+            else:
+                band_orb = None
+
+            if band_orb is None:
+                defect_entry.calculation_metadata["phs_data"] = None
+            else:
+                defect_entry.calculation_metadata["phs_data"] = {
+                    "band_orb": band_orb,
+                    "vbm_info": vbm_info,
+                    "cbm_info": cbm_info,
+                }
+
+        else:
+            defect_entry.calculation_metadata["phs_data"] = None
 
         return dp
 
