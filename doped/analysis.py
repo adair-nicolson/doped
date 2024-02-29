@@ -1502,13 +1502,16 @@ class DefectParser:
                 bulk_vr_path,
                 dir_type="bulk",
             )
-        bulk_vr = get_vasprun(bulk_vr_path, parse_projected_eigen=True)
-        if bulk_vr.projected_eigenvalues is None:
-            load_phs_data = False  # can't load PHS data without projected eigenvalues
-            warnings.warn(
-                "No projected orbitals found in bulk 'vasprun.xml'. Skipping"
-                " automated PHS data loading."
-            )
+        if load_phs_data:
+            bulk_vr = get_vasprun(bulk_vr_path, parse_projected_eigen=True)
+            if bulk_vr.projected_eigenvalues is None:
+                load_phs_data = False  # can't load PHS data without projected eigenvalues
+                warnings.warn(
+                    "No projected orbitals found in bulk 'vasprun.xml'. Skipping"
+                    " automated PHS data loading."
+                )
+        else:
+            bulk_vr = get_vasprun(bulk_vr_path)
 
         bulk_supercell = bulk_vr.final_structure.copy()
         # add defect simple properties
@@ -1523,13 +1526,16 @@ class DefectParser:
                 defect_vr_path,
                 dir_type="defect",
             )
-        defect_vr = get_vasprun(defect_vr_path, parse_projected_eigen=True)
-        if defect_vr.projected_eigenvalues is None:
-            load_phs_data = False
-            warnings.warn(
-                "No projected orbitals found in defect 'vasprun.xml'. Skipping"
-                " automated PHS data loading."
-            )
+        if load_phs_data:
+            defect_vr = get_vasprun(defect_vr_path, parse_projected_eigen=True)
+            if defect_vr.projected_eigenvalues is None:
+                load_phs_data = False  # can't load PHS data without projected eigenvalues
+                warnings.warn(
+                    "No projected orbitals found in bulk 'vasprun.xml'. Skipping"
+                    " automated PHS data loading."
+                )
+        else:
+            defect_vr = get_vasprun(defect_vr_path)
 
         possible_defect_name = os.path.basename(
             defect_path.rstrip("/.").rstrip("/")  # remove any trailing slashes to ensure correct name
