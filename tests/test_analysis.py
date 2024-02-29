@@ -819,11 +819,11 @@ class DopedParsingTestCase(unittest.TestCase):
                 dielectric=self.CdTe_dielectric,
                 charge_state=-1,
             )
-            assert len(w) == 1
-            assert issubclass(w[-1].category, UserWarning)
+            assert len(w) == 2  # PHS warning and charge warning
+            assert issubclass(w[-2].category, UserWarning)
             assert (
                 "Auto-determined defect charge q=-2 does not match specified charge q=-1. Will continue "
-                "with specified charge_state, but beware!" in str(w[-1].message)
+                "with specified charge_state, but beware!" in str(w[-2].message)
             )
             assert np.isclose(
                 parsed_v_cd_m1.corrections["freysoldt_charge_correction"], 0.26066457692529815
@@ -874,8 +874,8 @@ class DopedParsingTestCase(unittest.TestCase):
                 dielectric=fake_aniso_dielectric,
             ).defect_entry
             print([str(warn.message) for warn in w])  # for debugging
-            assert len(w) == 1
-            assert issubclass(w[-1].category, UserWarning)
+            assert len(w) == 2  # PHS warning and charge correction warning
+            assert issubclass(w[-2].category, UserWarning)
             assert (
                 "An anisotropic dielectric constant was supplied, but `OUTCAR` files (needed to compute "
                 "the _anisotropic_ Kumagai eFNV charge correction) are missing from the defect or bulk "
@@ -883,7 +883,7 @@ class DopedParsingTestCase(unittest.TestCase):
                 "Freysoldt (FNV) charge correction developed for _isotropic_ materials will be applied "
                 "here, which corresponds to using the effective isotropic average of the supplied "
                 "anisotropic dielectric. This could lead to significant errors for very anisotropic "
-                "systems and/or relatively small supercells!" in str(w[-1].message)
+                "systems and/or relatively small supercells!" in str(w[-2].message)
             )
 
         assert np.isclose(
@@ -902,7 +902,14 @@ class DopedParsingTestCase(unittest.TestCase):
                 skip_corrections=True,
                 charge_state=-2,
             )
-            assert len(w) == 0
+            for warning in w:
+                # Ignore warning about automated PHS data due to non-collinear calculation
+                if re.search(
+                    "does not allow the parsing of non-collinear calculations", str(warning.message)
+                ):
+                    continue
+                print(warning)
+                raise AssertionError
 
         assert np.isclose(
             parsed_v_cd_m2_fake_aniso.get_ediff() - sum(parsed_v_cd_m2_fake_aniso.corrections.values()),
@@ -951,8 +958,8 @@ class DopedParsingTestCase(unittest.TestCase):
                 dielectric=self.CdTe_dielectric,
                 charge_state=2,
             )
-        assert len(w) == 1  # no charge correction warning with iso dielectric, parsing from OUTCARs,
-        # but multiple OUTCARs present -> warning
+        assert len(w) == 2  # no charge correction warning with iso dielectric, parsing from OUTCARs,
+        # but multiple OUTCARs present -> warning. Load_PHS warning also present
         assert np.isclose(parsed_int_Te_2.get_ediff(), -6.2009, atol=1e-3)
 
         # test warning when only OUTCAR present but no core level info (ICORELEVEL != 0)
@@ -965,7 +972,7 @@ class DopedParsingTestCase(unittest.TestCase):
             parsed_int_Te_2_fake_aniso = self._check_no_icorelevel_warning_int_te(
                 fake_aniso_dielectric,
                 w,
-                1,
+                2,  # PHS warning as well
                 "-> Charge corrections will not be applied for this defect.",
             )
         assert np.isclose(
@@ -986,7 +993,7 @@ class DopedParsingTestCase(unittest.TestCase):
             parsed_int_Te_2_fake_aniso = self._check_no_icorelevel_warning_int_te(
                 fake_aniso_dielectric,
                 w,
-                2,
+                3,  # PHS warning as well
                 "`LOCPOT` files were found in both defect & bulk folders, and so the Freysoldt (FNV) "
                 "charge correction developed for _isotropic_ materials will be applied here, "
                 "which corresponds to using the effective isotropic average of the supplied anisotropic "
@@ -1023,7 +1030,7 @@ class DopedParsingTestCase(unittest.TestCase):
                 bulk_path=self.CdTe_BULK_DATA_DIR,
                 dielectric=self.CdTe_dielectric,
             ).defect_entry
-            assert len(w) == 1
+            assert len(w) == 2  # PHS warning as well
             assert all(issubclass(warning.category, UserWarning) for warning in w)
             assert (
                 "`LOCPOT` or `OUTCAR` files are missing from the defect or bulk folder. These are needed "
@@ -1049,7 +1056,7 @@ class DopedParsingTestCase(unittest.TestCase):
                 bulk_path=self.CdTe_BULK_DATA_DIR,
                 dielectric=self.CdTe_dielectric,
             )
-            assert len(w) == 0
+            assert len(w) == 1  # PHS warning
 
         assert np.isclose(
             parsed_v_cd_0.get_ediff() - sum(parsed_v_cd_0.corrections.values()), 4.166, atol=3e-3
@@ -1118,7 +1125,8 @@ class DopedParsingTestCase(unittest.TestCase):
             # other warnings is charge correction error warning, already tested
 
         with warnings.catch_warnings(record=True) as w:
-            self._parse_Int_Te_3_2_and_count_warnings(fake_aniso_dielectric, w, 3)
+            # updated to 4 to account for warning from load_phs data
+            self._parse_Int_Te_3_2_and_count_warnings(fake_aniso_dielectric, w, 4)
 
     def test_multiple_locpots(self):
         defect_path = f"{self.CdTe_EXAMPLE_DIR}/v_Cd_-2/vasp_ncl"
@@ -1136,7 +1144,7 @@ class DopedParsingTestCase(unittest.TestCase):
                 dielectric=self.CdTe_dielectric,
                 charge_state=-2,
             )
-            assert len(w) == 2  # multiple LOCPOTs (both defect and bulk)
+            assert len(w) == 3  # multiple LOCPOTs (both defect and bulk) and warning load_phs_data
             assert all(issubclass(warning.category, UserWarning) for warning in w)
             assert (
                 f"Multiple `LOCPOT` files found in bulk directory: {self.CdTe_BULK_DATA_DIR}. Using "
@@ -1165,7 +1173,7 @@ class DopedParsingTestCase(unittest.TestCase):
                 dielectric=self.CdTe_dielectric,
                 charge_state=-2,  # test manually specifying charge state
             )
-            assert len(w) == 2  # multiple `vasprun.xml`s (both defect and bulk)
+            assert len(w) == 3  # multiple `vasprun.xml`s (both defect and bulk) and warning load_phs_data
             assert all(issubclass(warning.category, UserWarning) for warning in w)
             assert (
                 f"Multiple `vasprun.xml` files found in bulk directory: {self.CdTe_BULK_DATA_DIR}. Using "
@@ -1805,7 +1813,12 @@ class DopedParsingTestCase(unittest.TestCase):
                 defect_path=f"{self.CdTe_EXAMPLE_DIR}/v_Cd_0/vasp_ncl",
                 bulk_path=f"{self.CdTe_BULK_DATA_DIR}",
             )
-        assert not [warning for warning in w if issubclass(warning.category, UserWarning)]
+
+        for warning in w:
+            # Ignore warning about automated PHS data.
+            if re.search("parsing of non-collinear calculations", str(warning.message)):
+                continue
+            raise AssertionError
 
 
 class DopedParsingFunctionsTestCase(unittest.TestCase):
@@ -1864,9 +1877,9 @@ class DopedParsingFunctionsTestCase(unittest.TestCase):
                 dielectric=9.13,
                 skip_corrections=True,
             )
-            assert len(w) == 1
+            assert len(w) == 2  # PHS warning as well
             assert all(
-                i in str(w[-1].message)
+                i in str(w[-2].message)
                 for i in [
                     "There are mismatching INCAR tags for your bulk and defect calculations",
                     "[('ADDGRID', True, False)]",
@@ -1900,9 +1913,9 @@ class DopedParsingFunctionsTestCase(unittest.TestCase):
                 dielectric=9.13,
                 skip_corrections=True,
             )
-            assert len(w) == 1
+            assert len(w) == 2  # PHS warning as well
             assert all(
-                i in str(w[-1].message)
+                i in str(w[-2].message)
                 for i in [
                     "There are mismatching INCAR tags for your bulk and defect calculations",
                     "[('ADDGRID', True, False), ('ENCUT', 450.0, 500.0)]",
@@ -1926,7 +1939,7 @@ class DopedParsingFunctionsTestCase(unittest.TestCase):
                 dielectric=9.13,
                 skip_corrections=True,
             )
-            assert len(w) == 2  # now INCAR and KPOINTS warnings!
+            assert len(w) == 3  # now INCAR and KPOINTS warnings! + PHS warnings
             assert any(
                 all(
                     i in str(warning.message)
