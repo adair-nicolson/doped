@@ -6,6 +6,7 @@ Tests for the `doped.analysis` module, which also implicitly tests most of the
 import gzip
 import json
 import os
+import re
 import shutil
 import unittest
 import warnings
@@ -546,7 +547,11 @@ class DefectsParsingTestCase(unittest.TestCase):
                 json_filename="Sb2Se3_O_example_defect_dict.json",
             )  # for testing in test_thermodynamics.py
         print([warn.message for warn in w])  # for debugging
-        assert not w  # no warnings
+        for warning in w:
+            # Ignore warning about automated PHS data. LORBIT > 10 not set in calculation
+            if re.search("No projected orbitals", str(warning.message)):
+                continue
+            raise AssertionError
         self._check_DefectsParser(Sb2Se3_O_dp)
         Sb2Se3_O_thermo = Sb2Se3_O_dp.get_defect_thermodynamics()
         dumpfn(Sb2Se3_O_thermo, os.path.join(self.Sb2Se3_DATA_DIR, "Sb2Se3_O_example_thermo.json"))  # for
@@ -676,7 +681,12 @@ class DefectsParsingTestCase(unittest.TestCase):
                 json_filename="V2O5_example_defect_dict.json",  # testing in test_thermodynamics.py
             )
         print([str(warning.message) for warning in w])  # for debugging
-        assert not w  # no warnings
+        for warning in w:
+            # Ignore warning about automated PHS data. No OUTCAR file in the test folders
+            if re.search("automated PHS data", str(warning.message)):
+                continue
+            raise AssertionError
+
         assert len(dp.defect_dict) == 3  # only three inequivalent neutral V_O present
 
         self._check_DefectsParser(dp)
@@ -704,9 +714,12 @@ class DefectsParsingTestCase(unittest.TestCase):
         with warnings.catch_warnings(record=True) as w:
             dp = DefectsParser("V2O5_test", dielectric=[4.186, 19.33, 17.49])
         print([str(warning.message) for warning in w])  # for debugging
-        assert not w  # no warnings
+        for warning in w:
+            # Ignore warning about automated PHS data. No OUTCAR file in the test folders
+            if re.search("automated PHS data", str(warning.message)):
+                continue
+            raise AssertionError
         assert len(dp.defect_dict) == 5  # now 5 defects, all still included
-        assert not w  # no warnings
         self._check_DefectsParser(dp)
         thermo = dp.get_defect_thermodynamics()
         v2o5_chempots = loadfn(os.path.join(self.V2O5_DATA_DIR, "chempots.json"))
