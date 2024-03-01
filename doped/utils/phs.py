@@ -30,7 +30,7 @@ from pymatgen.electronic_structure.core import Spin
 from pymatgen.io.vasp.outputs import Vasprun
 from vise.analyzer.vasp.band_edge_properties import VaspBandEdgeProperties
 
-from doped.utils.plotting import _format_defect_name, _get_backend
+from doped.utils.plotting import _get_backend, format_defect_name
 
 
 def make_band_edge_orbital_infos(
@@ -177,7 +177,7 @@ def get_phs_and_eigenvalue(DefectEntry, filename: Optional[str] = None, ks_label
         supercell_cbm=cbm,
         y_range=[vbm - 3, cbm + 3],
     )
-    f"{_format_defect_name(DefectEntry.name, False)}+ eigenvalues"
+    f"{format_defect_name(DefectEntry.name, False)}+ eigenvalues"
 
     with plt.style.context(style_file):
         plt.rcParams["axes.titlesize"] = 12
