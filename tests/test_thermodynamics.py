@@ -1451,6 +1451,7 @@ class DefectThermodynamicsTestCase(DefectThermodynamicsSetupMixin):
             cdte_defect_dict,
             chempots=self.CdTe_chempots,
             el_refs=self.CdTe_chempots["elemental_refs"],
+            load_phs_data=False,
         )
 
         sym_degen_df = cdte_defect_thermo.get_symmetries_and_degeneracies()
